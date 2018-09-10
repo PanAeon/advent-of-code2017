@@ -1,6 +1,6 @@
 {-# LANGUAGE QuasiQuotes #-}
 
-module Day1 () where
+module Day1 (checksumShift1, checksumShiftHalf) where
 
 import           Data.Char         (digitToInt)
 import           Text.RawString.QQ
@@ -28,13 +28,17 @@ input= filter (/= '\n') [r|42812249899758728399611695139795793356913694984837941
 633185334529484779322818611438194522292278787653763328944421516569181178517915745625295158611636365253948455727653672922299582352766484|]
 
 
-compute :: String -> Int
-compute xs = sum $  (digitToInt . fst) <$>  filter (uncurry (==)) (zip xs xs')
+checksumShift1 :: String -> Int
+checksumShift1 xs = sum $  (digitToInt . fst) <$>  filter (uncurry (==)) (zip xs xs')
   where
     xs' = drop 1 $ cycle xs
 
-tc1 =  compute "1122" -- 3
-tc2 = compute "1111" -- produces 4 because each digit (all 1) matches the next.
-tc3 = compute "1234" -- produces 0 because no digit matches the next.
-tc4 = compute "91212129" -- produces 9 because the only digit that matches the next one is the last digit, 9
+
 -- input 1034
+
+
+checksumShiftHalf :: String -> Int
+checksumShiftHalf xs = sum $  (digitToInt . fst) <$>  filter (uncurry (==)) (zip xs xs')
+  where
+    n = (length xs) `div` 2
+    xs' = drop n $ cycle xs
