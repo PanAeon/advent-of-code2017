@@ -1,8 +1,7 @@
 module Main where
 
-import           Day5
-import           Lib
+import           Day6
+
 
 main :: IO ()
-main = putStrLn $ show $ iter task5Input
-
+main = putStrLn $ show $ cycleLength input6
