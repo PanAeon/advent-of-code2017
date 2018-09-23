@@ -24,6 +24,8 @@ dependencies:
 - raw-strings-qq
 - containers
 - vector
+- free
+- transformers
 
 library:
   source-dirs: src
