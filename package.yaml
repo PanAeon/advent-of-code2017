@@ -26,6 +26,7 @@ dependencies:
 - vector
 - free
 - transformers
+- parsec
 
 library:
   source-dirs: src
