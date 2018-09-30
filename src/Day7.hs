@@ -1,3 +1,4 @@
+{-# LANGUAGE LambdaCase #-}
 module Day7
     (
     ) where
@@ -22,11 +23,14 @@ import           Text.Parsec.Combinator (between, many1, sepBy)
 import           Text.Parsec.Prim       (parse, parseTest)
 
 task5InputRaw = unsafePerformIO $ do
-                handle <- openFile "/Users/edevi86/Downloads/day7input" ReadMode
+                handle <- openFile "input/day7" ReadMode
                 contents <- hGetContents handle
                 pure $ (lines contents)
 
 task5Input = parseLine <$> task5InputRaw
+
+rootNode = Node "bpvhwhh" 60 ["lzfgxlb","fzclaow","kfdxxb","xnmjpa","rilgrr","fvrrpo","zcmlgn"]
+myTree = buildTree task5Input rootNode
 
 data Node = Node String Int [String] deriving Show
 
@@ -51,13 +55,34 @@ parseLine s = case (parse nodeParser "" s) of
                 Left err -> error (show err)
                 Right n  -> n
 
-buildTree :: [Node] -> Tree
-buildTree = undefined
+buildTree :: [Node] -> Node -> Tree
+buildTree _       (Node id' weight []) = TNode id' weight []
+buildTree mapping (Node id' weight xs) = TNode id' weight ys
+  where
+    getNode name = head $ filter ( (== name) . getName ) mapping
+    ys = buildTree mapping . getNode <$> xs
+
+
 
 findRoot :: [Node] -> [String]
 findRoot xs = filter (flip S.notMember m ) ys
   where
     m =  S.fromList $ xs >>= getChildren
     ys = getName <$> xs
-    getChildren (Node _ _ xs) = xs
-    getName (Node name _ _) = name
+
+
+getChildren (Node _ _ xs) = xs
+getName (Node name _ _) = name
+
+balance :: Tree -> (String, Int, [[(String, Int)]])
+balance (TNode id' w []) = (id', w, [])
+balance (TNode id' w children) = if isBalanced
+                                 then (id', (w + sum weights), unbalancedBefore)
+                                 else (id', (w + sum weights), unbalancedNow : unbalancedBefore)
+  where
+    zs = balance <$> children
+    unbalancedBefore =  zs >>= (\case (_, _, xs) -> xs)
+    weights = (\case (_, w, _) -> w) <$> zs
+    s1 =  head weights
+    isBalanced = all (== s1) weights
+    unbalancedNow =  (\case (_i, _w, _) -> (_i, _w))<$> zs
