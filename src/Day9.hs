@@ -64,18 +64,17 @@ escapedChar := anyCharExcept '>' | '!' FollowedByAnyCharAtAll
 
 
 
-int :: Parser Int
-int = ap sign (read <$> many1 digit)
+groupGCP :: Parser Int
+groupGCP = (sum) <$> (char '{' *> (sepBy ( (groupGCP) <|> ( garbageGCP)) (char ',')) <* char '}')
 
--- | parse an optional plus or minus sign, returning 'negate' or 'id'
-sign :: Num a => Parser (a -> a)
-sign = (char '-' >> return negate) <|> (optional (char '+') >> return id)
+garbageGCP :: Parser Int
+garbageGCP = sum <$> (between (char '<') (char '>') (many escapedGCString))
 
-
-regNameP :: Parser String
-regNameP = many1 alphaNum
+escapedGCString :: Parser Int
+escapedGCString =  (  0 <$ ((char '!') *> anyChar)) <|> ( 1 <$ (satisfy (/= '>')))
 
 
+-- parse groupGCP "" task9InputRaw
 {-
 
 --- Part Two ---
@@ -97,31 +96,3 @@ How many non-canceled characters are within the garbage in your puzzle input?
 
 
 -}
-
--- actionP :: Parser Bool
--- actionP = (True <$ string "inc") <|> (False <$ string "dec")
---
--- conditionP :: Parser ConditionOp
--- conditionP = lessP <|> gtP
---                    <|> (EQ' <$ string "==")
---                    <|> (NE' <$ string "!=")
---   where
---      lessP = do -- FIXME: rewrite this shame
---                _ <- char '<'
---                e <- optional (char '=')
---                pure $ if isJust e then  LE' else LT'
---      gtP = do
---                _ <- char '>'
---                e <- optional (char '=')
---                pure $ if isJust e then  GE' else GT'
---          --     (LE' <$ string "<=")
---          -- <|> (LT' <$ string "<")
---          -- <|> (GT' <$ string ">")
---          -- <|> (GE' <$ string ">=")
-
-
-
--- instructionP :: Parser Instruction
--- instructionP = Instruction <$> regNameP <* spaces <*> actionP <* spaces <*> int <* spaces <*
---                                (string "if") <* spaces <*> regNameP <* spaces <*> conditionP
---                                <* spaces <*> int
