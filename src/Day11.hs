@@ -32,13 +32,14 @@ distance xs =  (abs cx + abs cy + abs cz) `div` 2
     (cx, cy, cz) = foldr f (0,0,0) xs
     f (x0, y0, z0) (x, y, z) = (x0 +x, y0 + y, z0 + z)
 
-allDistances :: [(Int, Int, Int)] -> Int
-allDistances xs =  maximum $ reverse ds
+-- FIXME: think
+allDistances :: [(Int, Int, Int)] -> [Int]
+allDistances xs =  reverse ds
   where
-    rs = scanr f (0,0,0) xs
+    rs = scanl f (0,0,0) xs
     ds = g <$> rs
     g (cx,cy,cz) = (abs cx + abs cy + abs cz) `div` 2
-    f (x0, y0, z0) (x, y, z) = (x0 +x, y0 + y, z0 + z)
+    f (x, y, z) (x0, y0, z0) = (x0 +x, y0 + y, z0 + z)
 
 -- 720
 -- 1132 <- to low (how this is possible?)
