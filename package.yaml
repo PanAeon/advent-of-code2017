@@ -27,6 +27,7 @@ dependencies:
 - free
 - transformers
 - parsec
+- split
 
 library:
   source-dirs: src
