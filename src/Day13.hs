@@ -55,39 +55,72 @@ lineP = (\a b -> (a,b)) <$> int <* string ":" <* spaces <*> int <* spaces
 
 data ScannersPositions = ScannersPositions [Int] deriving Show
 data ScannersConfig    = ScannersConfig [Int] deriving Show
+data SV = SV [Int] deriving Show
 
-data World = World Int ScannersConfig ScannersPositions deriving Show
+data World = World Int ScannersConfig ScannersPositions SV deriving Show
 
 updateState :: World -> World
-updateState (World p (ScannersConfig sc) (ScannersPositions xs)) =
-    World (p+1) (ScannersConfig sc) xs'
+updateState (World p (ScannersConfig sc) (ScannersPositions xs) (SV vs)) =
+    World (p+1) (ScannersConfig sc) xs' (SV vs')
   where
-    xs' = ScannersPositions $ f <$> zip [0..] (zip sc xs)
-    f (i, (s, x))
+    vs' = g <$> zip vs (zip [0..] (zip sc xs))
+    xs' = ScannersPositions $ f <$> zip vs' (zip [0..] (zip sc xs))
+    g (v, (i, (s, x)))
+      | x == 0 = 1
+      | x == s - 1 = (negate 1)
+      | otherwise  = v
+    f (v, (i, (s, x)))
       | x < 0  = x
-      | x >= s = 0
-      | otherwise = x + 1
+      | x == 0 = 1
+      | x == s - 1 = s - 2
+      | otherwise = (x + v)
 
+
+getLength :: World -> Int
+getLength (World _ (ScannersConfig sc) _ _) = length sc
 
 initialWorld :: [(Int, Int)] -> World
-initialWorld ys =  (World (negate 1) (ScannersConfig sc) (ScannersPositions xs))
+initialWorld ys =  World (negate 1) (ScannersConfig sc) (ScannersPositions xs) (SV vs)
   where
     n  = (maximum $ fst <$> ys) + 1
     m  = M.fromList ys
     sc = [ maybe (negate 1) id $ M.lookup i m | i <- [0..n-1]]
     xs = [ maybe (negate 1) (const 0) $ M.lookup i m | i <- [0..n-1]]
+    vs = replicate n 1
+
+
+showN :: [(Int, Int)] -> Int -> IO ()
+showN ys n = (putStrLn . printWorld) $ head $ (drop n $ iterate updateState (initialWorld ys))
+
+calculateDelay = dropWhile (\x -> (snd x) > 0 ) ((\d -> (d, calculateScore d task13Input)) <$> [0..2000])
+
+calculateScore :: Int -> [(Int, Int)] -> Int
+calculateScore delay ys = sum $ score <$> ys''
+  where
+    ys' = drop delay $ iterate updateState (initialWorld ys)
+    packetInside (World p (ScannersConfig sc) _ _) = p < (length sc)
+    n = getLength (initialWorld ys)
+    ys'' = zip [-1..n-2] (ys')
+    score (p, (World z (ScannersConfig sc) (ScannersPositions xs) _)) =
+      if p >= 0  && xs !! (p + 1) == 0
+      then (p + 1) * (sc !! (p + 1))
+      else 0
+-- 2972 is too high
+-- 1960 is the right answer
 
 
 printWorld  :: World -> String
-printWorld (World p (ScannersConfig sc) (ScannersPositions xs)) =
+printWorld (World p (ScannersConfig sc) (ScannersPositions xs) _) =
     firstRow ++ rest
   where
     firstRow = intercalate " " [ " " ++ show i ++ " " | i <- [0..(length xs - 1)]] ++ "\n"
     maxL = maximum sc
     rest = intercalate "\n" [ printRaw y  | y <- [0..maxL-1]]
-    printRaw y = intercalate " " [printCell y h x |(h,x) <- zip sc xs]
+    printRaw y = intercalate " " [printCell y h x i |(i, (h,x)) <- zip [0..] (zip sc xs)]
 
-    printCell y h x
+    printCell y h x i
+      | y == 0 && i == p && y == x = "(S)"
+      | y == 0 && i == p = "( )"
       | h == (negate 1) = "   "
       | y == x = "[S]"
       | y < h = "[ ]"
