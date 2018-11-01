@@ -28,6 +28,9 @@ dependencies:
 - transformers
 - parsec
 - split
+- mtl
+- random
+- array
 
 library:
   source-dirs: src
