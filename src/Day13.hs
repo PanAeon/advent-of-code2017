@@ -1,6 +1,6 @@
 {-# LANGUAGE LambdaCase #-}
 module Day13
-    (
+    (calculateDelay
     ) where
 
 import           Data.Vector.Unboxed    ()
@@ -92,7 +92,7 @@ initialWorld ys =  World (SC sc) (SP xs) (SV vs)
 
 
 -- That's not the right answer.  570048
-calculateDelay = head $ dropWhile (\x -> (snd x) > 0 ) ((\d -> (d, calculateScoreNormally d vs )) <$> [570049..])
+calculateDelay = head $ dropWhile (\x -> (snd x) > 0 ) ((\d -> (d, calculateScoreNormally d vs )) <$> [0..])
   where
     (World (SC vs) _ _)  = initialWorld task13Input
     -- hs = UV.toList vs
@@ -105,7 +105,7 @@ calculateScoreNormally delay heights  = UV.sum score
     score = UV.map (\case (h,i) -> sc (i+1) (1+i+delay) h) zs
     -- score = [ sc (i+1) t h | (h, i) <- zip heights [-1..n-2], let t = 1 + i + delay]
     sc k t h = if h > 0 && t `mod` (2 * (h-1)) == 0
-               then k * h
+               then 1
                else 0
 
 {-

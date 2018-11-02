@@ -1,7 +1,7 @@
 module Main where
 
-import           Day6
+import           Day13
 
 
 main :: IO ()
-main = putStrLn $ show $ cycleLength input6
+main = putStrLn $ show $ calculateDelay
