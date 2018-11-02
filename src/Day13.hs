@@ -1,8 +1,9 @@
+{-# LANGUAGE LambdaCase #-}
 module Day13
     (
     ) where
 
-
+import           Data.Vector.Unboxed    ()
 import           Data.Vector.Unboxed    (Vector)
 import qualified Data.Vector.Unboxed    as UV
 import           System.IO
@@ -53,18 +54,19 @@ lineP = (\a b -> (a,b)) <$> int <* string ":" <* spaces <*> int <* spaces
 
 ----------
 
-data ScannersPositions = ScannersPositions [Int] deriving Show
-data ScannersConfig    = ScannersConfig [Int] deriving Show
-data SV = SV [Int] deriving Show
+data SP = SP (Vector Int) deriving Show
+data SC    = SC (Vector Int) deriving Show
+data SV = SV (Vector Int) deriving Show
 
-data World = World Int ScannersConfig ScannersPositions SV deriving Show
+data World = World SC SP SV deriving Show
 
 updateState :: World -> World
-updateState (World p (ScannersConfig sc) (ScannersPositions xs) (SV vs)) =
-    World (p+1) (ScannersConfig sc) xs' (SV vs')
+updateState (World (SC sc) (SP xs) (SV vs)) =
+    World (SC sc) (SP xs') (SV vs')
   where
-    vs' = g <$> zip vs (zip [0..] (zip sc xs))
-    xs' = ScannersPositions $ f <$> zip vs' (zip [0..] (zip sc xs))
+    n = UV.length sc
+    vs' = UV.map g $ UV.zip vs (UV.zip (UV.generate n id) (UV.zip sc xs))
+    xs' =  UV.map f $ UV.zip vs' (UV.zip (UV.generate n id) (UV.zip sc xs))
     g (v, (i, (s, x)))
       | x == 0 = 1
       | x == s - 1 = (negate 1)
@@ -77,42 +79,71 @@ updateState (World p (ScannersConfig sc) (ScannersPositions xs) (SV vs)) =
 
 
 getLength :: World -> Int
-getLength (World _ (ScannersConfig sc) _ _) = length sc
+getLength (World (SC sc) _ _) = UV.length sc
 
 initialWorld :: [(Int, Int)] -> World
-initialWorld ys =  World (negate 1) (ScannersConfig sc) (ScannersPositions xs) (SV vs)
+initialWorld ys =  World (SC sc) (SP xs) (SV vs)
   where
     n  = (maximum $ fst <$> ys) + 1
     m  = M.fromList ys
-    sc = [ maybe (negate 1) id $ M.lookup i m | i <- [0..n-1]]
-    xs = [ maybe (negate 1) (const 0) $ M.lookup i m | i <- [0..n-1]]
-    vs = replicate n 1
+    sc = UV.fromList [ maybe (negate 1) id $ M.lookup i m | i <- [0..n-1]]
+    xs = UV.fromList [ maybe (negate 1) (const 0) $ M.lookup i m | i <- [0..n-1]]
+    vs = UV.replicate n 1
 
 
-showN :: [(Int, Int)] -> Int -> IO ()
-showN ys n = (putStrLn . printWorld) $ head $ (drop n $ iterate updateState (initialWorld ys))
+-- That's not the right answer.  570048
+calculateDelay = head $ dropWhile (\x -> (snd x) > 0 ) ((\d -> (d, calculateScoreNormally d vs )) <$> [570049..])
+  where
+    (World (SC vs) _ _)  = initialWorld task13Input
+    -- hs = UV.toList vs
 
-calculateDelay = dropWhile (\x -> (snd x) > 0 ) ((\d -> (d, calculateScore d task13Input)) <$> [0..2000])
+calculateScoreNormally :: Int -> Vector Int -> Int
+calculateScoreNormally delay heights  = UV.sum score
+  where
+    n   = UV.length heights
+    zs  = UV.zip heights (UV.generate n (\i -> i - 1))
+    score = UV.map (\case (h,i) -> sc (i+1) (1+i+delay) h) zs
+    -- score = [ sc (i+1) t h | (h, i) <- zip heights [-1..n-2], let t = 1 + i + delay]
+    sc k t h = if h > 0 && t `mod` (2 * (h-1)) == 0
+               then k * h
+               else 0
+
+{-
+calculateScoreNormally delay heights  = UV.sum score
+  where
+    n   = length heights
+    score = [ sc (i+1) t h | (h, i) <- zip heights [-1..n-2], let t = 1 + i + delay]
+    sc k t h = if h > 0 && t `mod` (2 * (h-1)) == 0
+               then k * h
+               else 0
+-}
 
 calculateScore :: Int -> [(Int, Int)] -> Int
 calculateScore delay ys = sum $ score <$> ys''
   where
-    ys' = drop delay $ iterate updateState (initialWorld ys)
-    packetInside (World p (ScannersConfig sc) _ _) = p < (length sc)
-    n = getLength (initialWorld ys)
-    ys'' = zip [-1..n-2] (ys')
-    score (p, (World z (ScannersConfig sc) (ScannersPositions xs) _)) =
-      if p >= 0  && xs !! (p + 1) == 0
-      then (p + 1) * (sc !! (p + 1))
+    iw  = initialWorld ys
+    n   = getLength (iw)
+    ys' = drop delay $ iterate updateState (iw)
+    ys'' = zip [-1..n] (ys')
+    score (p, (World (SC sc) (SP xs) _)) =
+      if p >= 0  && xs UV.! (p + 1) == 0
+      then (p + 1) * (sc UV.! (p + 1))
       else 0
 -- 2972 is too high
 -- 1960 is the right answer
+-- part II your answer is too low 29508
+-- 29509 is too low
+-- 209688 is too low
+showN :: [(Int, Int)] -> Int -> IO ()
+showN ys n = (putStrLn . printWorld (n-1)) $ head $ (drop n $ iterate updateState (initialWorld ys))
 
 
-printWorld  :: World -> String
-printWorld (World p (ScannersConfig sc) (ScannersPositions xs) _) =
+printWorld  :: Int -> World -> String
+printWorld p (World (SC sc') (SP xs') _) =
     firstRow ++ rest
   where
+    sc = UV.toList sc'
+    xs = UV.toList xs'
     firstRow = intercalate " " [ " " ++ show i ++ " " | i <- [0..(length xs - 1)]] ++ "\n"
     maxL = maximum sc
     rest = intercalate "\n" [ printRaw y  | y <- [0..maxL-1]]
