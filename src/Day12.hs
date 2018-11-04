@@ -1,5 +1,5 @@
 module Day12
-    (
+    (dfs, Node(..), connectedComponents
     ) where
 
 
@@ -86,11 +86,15 @@ connectedComponents :: [Node] -> Int
 connectedComponents xs = f open
    where
      m = toMap xs
-     open = M.keys m
-     f [] = 0
-     f (x:xs) = 1 + f ys
+     open = S.fromList $ M.keys m
+
+     f ss = if S.null ss
+            then 0
+            else 1 + f ys
        where
-         ys = xs \\ (dfs m [x] S.empty)
+         x = S.elemAt 0 ss
+         xs = S.deleteAt 0 ss
+         ys = xs S.\\  (S.fromList (dfs m [x] S.empty))
 
 
 
