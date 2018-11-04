@@ -1,4 +1,4 @@
-module Day10 where
+module Day10(generateHash) where
 
 import           System.IO
 import           System.IO.Unsafe
