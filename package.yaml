@@ -31,6 +31,8 @@ dependencies:
 - mtl
 - random
 - array
+- vector-algorithms
+
 
 library:
   source-dirs: src
