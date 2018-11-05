@@ -134,6 +134,7 @@ calculateScore delay ys = sum $ score <$> ys''
 -- part II your answer is too low 29508
 -- 29509 is too low
 -- 209688 is too low
+-- 3903378
 showN :: [(Int, Int)] -> Int -> IO ()
 showN ys n = (putStrLn . printWorld (n-1)) $ head $ (drop n $ iterate updateState (initialWorld ys))
 
