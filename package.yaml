@@ -26,6 +26,7 @@ dependencies:
 - vector
 - free
 - transformers
+- strict
 - parsec
 - split
 - mtl
