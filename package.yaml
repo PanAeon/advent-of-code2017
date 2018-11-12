@@ -33,10 +33,15 @@ dependencies:
 - random
 - array
 - vector-algorithms
-
+- monad-loops
+- primitive
 
 library:
   source-dirs: src
+
+ghc-options:
+  - -threaded
+  - -O2
 
 executables:
   advent-of-code2017-exe:
@@ -45,6 +50,7 @@ executables:
     ghc-options:
     - -threaded
     - -rtsopts
+    # - -prof
     - -with-rtsopts=-N
     - -O2
     dependencies:

@@ -8,6 +8,6 @@ import           Day18
 
 -- FIXME: write fast dfs, why it can't handle 16k nodes?
 main :: IO ()
-main = putStrLn $ show $ runProgram task18Input
+main = putStrLn $ show $ runDuet task18Input 1000
 
   --putStrLn $ show $ calculateDelay

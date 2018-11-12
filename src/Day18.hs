@@ -3,7 +3,7 @@
 {-# LANGUAGE Strict       #-}
 {-# LANGUAGE StrictData   #-}
 module Day18
-    (runProgram, task18Input
+    (runProgram, task18Input, runDuet
     ) where
 
 
@@ -33,10 +33,21 @@ import qualified Data.Set                    as S
 import qualified Numeric                     as N
 import           Text.Parsec.Combinator      (between, many1, sepBy)
 import           Text.Parsec.Prim            (parse, parseTest, try)
-
-
+import  Data.Vector.Unboxed.Mutable(MVector)
+import qualified Data.Vector.Unboxed.Mutable as VM
+import qualified Data.Vector as V
 import qualified Data.Vector.Generic         as G
 import qualified Data.Vector.Generic.Mutable as GM
+-- import GHC.Prim
+import Control.Monad
+import Control.Monad.ST
+import Control.Monad.Primitive
+import Data.Vector.Unboxed (freeze)
+import qualified Data.Vector.Unboxed as VU
+import Control.Monad.Loops
+import Debug.Trace
+
+-- import  Control.Monad.Primitive(PrimMonad)
 import Data.Either
 
 task18InputRaw name = unsafePerformIO $ do
@@ -47,6 +58,15 @@ task18InputRaw name = unsafePerformIO $ do
 task18Input = parseLine <$> task18InputRaw  "input/day18"
 
 example = parseLine <$> task18InputRaw  "input/day18example"
+
+ex2 = parseLine <$> ["snd 1",
+                     "snd 2",
+                     "snd p",
+                     "rcv a",
+                     "rcv b",
+                     "rcv c",
+                     "rcv d"]
+
 
 type Param = Either Int Char
 data Instruction =
@@ -131,18 +151,168 @@ runProgram :: [Instruction] -> [([Int], Int, Int)]
 runProgram is = takeWhile (\case (_, ip, _) -> ip >= 0 && ip < _N ) $ iterate' (evaluate is) (xs0, 0, 0)
   where
     _N = length is
-    xs0 = take 256 (repeat 0)
-
+    xs0 = take 26 (repeat 0)
 
 ------------- 2951 ------------ took a lot ...
 
--- it's meant to be run twice at the same time.
+-- data Instructions = Instructions [Instruction] Instruction [Instruction] -- TODO: use Zipper, measure performance
+type Vec s = MVector (PrimState (ST s)) Int
 
-{-
 
-    snd X sends the value of X to the other program. These values wait in a queue until that program is ready to receive them. Each program has its own message queue, so a program can never receive a message it sent.
-    rcv X receives the next value and stores it in register X. If no values are in the queue, the program waits for a value to be sent to it. Programs do not continue to the next instruction until they have received a value. Values are received in the order they are sent.
+{-# INLINE idx #-}
+idx !ch = ord ch - 97
 
--}
+{-# INLINE getReg #-}
+getReg :: Vec s -> Char -> ST s (Int)
+getReg !xs !i = VM.unsafeRead xs (idx i)
 
----------------------------------------------------------------------
+{-# INLINE setReg #-}
+setReg :: Vec s -> Char -> Int -> ST s ()
+setReg !regs !ch !x =  VM.unsafeWrite regs (idx ch) x
+
+-- setReg' :: Vec s -> Char -> Int -> ST s (Vec s)
+-- setReg' regs ch x =  do
+--                        VM.unsafeWrite regs (idx ch) x
+--                        pure regs
+
+{-# INLINE toVal #-}
+toVal _ !(Left i) = pure $! i
+toVal !vs !(Right ch) = getReg vs ch
+
+{-# INLINE evaluateM #-}
+evaluateM ::  V.Vector Instruction -> (Vec s) -> (Int, Int, [Int], [Int], Bool) ->  ST s (Int, Int, [Int], [Int], Bool)
+evaluateM !is !rs !(ip, ic, send, recv, _)  =
+  do
+    -- rs <- st
+    case is V.! ip of
+       Snd p ->   (\v -> (ip + 1, ic + 1, v:send, recv, False)) <$> (toVal rs p)
+       Set r p -> ((toVal rs p) >>= (setReg rs r)) *> (pure (ip + 1, ic + 1, send, recv, False))
+       Add r p -> do
+                    v <- toVal rs p
+                    rv <- getReg rs r
+                    setReg rs r (v + rv)
+                    pure $! (ip + 1, ic + 1, send, recv, False)
+       Mul r p -> do
+                    v <- toVal rs p
+                    rv <- getReg rs r
+                    setReg rs r (v * rv)
+                    pure $!  (ip + 1, ic + 1, send, recv, False)
+       Mod r p -> do
+                    p' <- toVal rs p
+                    r' <- getReg rs r
+                    setReg rs r (r' `mod` p')
+                    pure $! (ip + 1, ic + 1, send, recv, False)
+       Rcv r   -> do
+                    if null recv
+                    then pure $! (ip + 1, ic + 1, send, recv, True)
+                    else do
+                           setReg rs r (head recv)
+                           pure $! (ip + 1, ic + 1, send, tail recv, False)
+                    -- r' <- getReg rs r
+                    -- if (r' /= 0)
+                    -- then do
+                    --        if null recv
+                    --        then pure (ip + 1, ic + 1, send, recv, True)
+                    --        else do
+                    --               setReg rs r (head recv)
+                    --               pure (ip + 1, ic + 1, send, tail recv, False)
+                    -- else pure (ip + 1, ic + 1, send, recv, False)
+
+       Jgz c l  -> do
+                     c' <- toVal rs c
+                     l' <- toVal rs l
+                     if (c' /= 0)
+                     then pure $!  (ip + l', ic + 1, send, recv, False)
+                     else pure $!  (ip + 1, ic + 1, send, recv, False)
+
+
+-- runMut :: V.Vector Instruction -> ST s ([Int], Int, Int)
+-- runMut is = do
+--         v0 <- VM.replicate 26 0
+--         setReg v0 'p' 1
+--         (p1, s1, _, _) <- iterateUntilM (\case (_,ic, _, _) -> ic >= 5)(evaluateM is v0) (0,0, [], [])
+--         res <- UV.freeze v0
+--         pure (UV.toList res, p1, s1)--undefined --((VU.freeze v0), p1, s1)
+
+-- 127 -- too low
+runDuet :: [Instruction] -> Int -> ((Int, Int, [Int], [Int], Bool), VU.Vector Int, (Int, Int, [Int], [Int], Bool), VU.Vector Int, Int)
+runDuet xs _M = head $ dropWhile (not . terminationCond) $ iterate'  f (z0, reg0, z0, reg1, 0)
+   where
+     reg0 = (VU.replicate 26 (0::Int)) VU.// [(idx 'p', 0)]
+     reg1 = (VU.replicate 26 (0::Int)) VU.// [(idx 'p', 1)]
+     _N = length xs
+     is = (V.fromList xs)
+     z0 = (0, 0, [], [], False)
+     terminationCond !((p0, c0, s0, r0, rq0), _, (p1, c1, s1, r1, rq1), _,  _) =
+           {-  (c0 + c1) > _M && -}  ( rq0 && rq1 && (null r0) && (null r1)) || p0 < 0 || p0 >= _N || p1 < 0 || p1 >= _N
+     f !(z0@(p0, c0, s0, r0, rq0), regs0, z1@(p1, c1, s1, r1, rq1), regs1, numSend) =
+        let
+           ((!p0', !c0', !s0', !r0', !rq0'), reg0') = runUntilEmptyQ is regs0 z0
+           ((!p1', !c1', !s1', !r1', !rq1'), reg1') = runUntilEmptyQ is regs1 z1
+        in  ((p0', c0', [], r0' ++ (reverse s1'), rq0'), reg0', (p1', c1', [],  r1' ++ reverse s0', rq1'), reg1', numSend + (length s0')) -- r0 and r1 are empty
+
+  -- runST $ do
+  --   reg0 <- VM.replicate 26 0
+  --   setReg reg0 'p' 0
+  --   reg0' <- VU.freeze reg0
+  --   reg1 <- VM.replicate 26 0
+  --   reg1' <- VU.freeze reg1
+  --   setReg reg1 'p' 1
+  --   let
+  --     is = (V.fromList xs)
+  --     z0 = (0, 0, [], [], False)
+  --     _N = V.length is
+  --     f !(z0@(p0, c0, s0, r0, rq0), z1@(p1, c1, s1, r1, rq1), numSend) = do
+  --       ((!p0', !c0', !s0', !r0', !rq0'), reg0'') <- runUntilEmptyQ is reg0' z0
+  --       ((!p1', !c1', !s1', !r1', !rq1'), reg1'') <- runUntilEmptyQ is reg1' z1
+  --       pure $!  ((p0', c0', [], r0' ++ (reverse s1'), rq0'), (p1', c1', [],  r1' ++ reverse s0', rq1'), numSend + (length s0')) -- r0 and r1 are empty
+  --     terminationCond !((p0, c0, s0, r0, rq0), (p1, c1, s1, r1, rq1), _) =
+  --      {-  (c0 + c1) > _M && -}  ( rq0 && rq1 && (null r0) && (null r1)) || p0 < 0 || p0 >= _N || p1 < 0 || p1 >= _N
+  --
+  --   pure $ iterateUntilM' terminationCond f (z0, z0, 0)
+    -- runUntilEmptyQ is r1 v0
+    -- pure undefined
+
+
+
+--iterate' f x = x `seq` x : iterate' f (f x)
+{-# INLINE iterateUntilM' #-}
+iterateUntilM' :: (Monad m) => (a -> Bool) -> (a -> m a) -> a -> m a
+iterateUntilM' !p !f !v
+    | p v       = return v
+    | otherwise = (f $! v) >>= iterateUntilM' p f
+
+
+runUntilEmptyQ :: V.Vector Instruction -> (VU.Vector Int) -> (Int, Int, [Int], [Int], Bool) ->  ((Int, Int, [Int], [Int], Bool), (VU.Vector Int))
+runUntilEmptyQ !is !regf !z = runST $ do
+                     reg <- VU.thaw regf
+                     res   <- iterateUntilM' queueIsEmpty (evaluateM is reg) z
+                     reg' <- VU.freeze reg
+                     pure (res, reg' )
+        where
+          _N = V.length is
+          queueIsEmpty !(!p, !ic, !send, !recv, !req) = req || p < 0 || p >= _N || req -- || ((ic+1) `mod` 100 == 0)
+
+
+
+-- runMutable :: [Instruction] -> ([Int], Int, Int)
+-- runMutable is = runST res --takeWhile (\case (_, ip, _) -> ip >= 0 && ip < _N ) $ iterate' (evaluate is) (xs0, 0, 0)
+--   where
+--     _N = length is
+--     res = runMut (V.fromList is)
+
+
+
+
+printRegisters :: ([Int], Int, Int) -> String
+printRegisters (rs, p, s) = (show rs') ++ "..., p: " ++ (show p) ++ ", s: " ++ (show s)
+  where
+    rs' = reverse $ dropWhile (== 0) (reverse rs)
+
+----------
+vexample :: PrimMonad m => m (MVector (PrimState m) Int)
+vexample = do
+  v <- VM.new 10
+  forM_ [0..9] $ \i ->
+     VM.write v i (2*i)
+  pure v
