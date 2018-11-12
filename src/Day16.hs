@@ -285,6 +285,9 @@ foo _N labels x = (labelsMap M.!) <$> x
  where
   labelsMap = unpackLabels _N labels
 
+-- right awnser∷
+-- iterateWhole 16 ( 1000000000 `mod` 126)
+
        -- where
          -- z = IS.sortBy (\a b -> compare (snd a) (snd b) ) (G.basicUnsafeThaw $ UV.zip xs pattern')
          --UV.map fst  (IS.sortBy snd) _ -- (UV.zip xs pattern'))
