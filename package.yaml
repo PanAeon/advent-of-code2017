@@ -40,7 +40,6 @@ library:
   source-dirs: src
 
 ghc-options:
-  - -threaded
   - -O2
 
 executables:

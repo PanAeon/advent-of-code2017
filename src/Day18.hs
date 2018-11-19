@@ -30,25 +30,27 @@ import           Data.Maybe                  (isJust)
 import           Data.Set                    (Set)
 import qualified Data.Set                    as S
 -- import qualified Data.Vector.Algorithms.Insertion as IS
+import qualified Data.Vector                 as V
+import qualified Data.Vector.Generic         as G
+import qualified Data.Vector.Generic.Mutable as GM
+import           Data.Vector.Unboxed.Mutable (MVector)
+import qualified Data.Vector.Unboxed.Mutable as VM
 import qualified Numeric                     as N
 import           Text.Parsec.Combinator      (between, many1, sepBy)
 import           Text.Parsec.Prim            (parse, parseTest, try)
-import  Data.Vector.Unboxed.Mutable(MVector)
-import qualified Data.Vector.Unboxed.Mutable as VM
-import qualified Data.Vector as V
-import qualified Data.Vector.Generic         as G
-import qualified Data.Vector.Generic.Mutable as GM
 -- import GHC.Prim
-import Control.Monad
-import Control.Monad.ST
-import Control.Monad.Primitive
-import Data.Vector.Unboxed (freeze)
-import qualified Data.Vector.Unboxed as VU
-import Control.Monad.Loops
-import Debug.Trace
+import           Control.Monad
+import           Control.Monad.Loops
+import           Control.Monad.Primitive
+import           Control.Monad.ST
+import           Data.Vector.Unboxed         (freeze)
+import qualified Data.Vector.Unboxed         as VU
+import           Debug.Trace
 
 -- import  Control.Monad.Primitive(PrimMonad)
-import Data.Either
+import           Data.Either
+
+-- simplify, take just iterate, single var, st ... and check them separately
 
 task18InputRaw name = unsafePerformIO $ do
                 handle <- openFile name ReadMode
@@ -141,7 +143,7 @@ evaluate !is !(regs, ip, sound) = case is !! ip of
     idx ch = ord ch - 97
     setReg ch x = update (idx ch) x regs
     getReg ch = regs !! (idx ch)
-    toVal (Left i) = i
+    toVal (Left i)   = i
     toVal (Right ch) = getReg ch
 
 
@@ -164,11 +166,11 @@ idx !ch = ord ch - 97
 
 {-# INLINE getReg #-}
 getReg :: Vec s -> Char -> ST s (Int)
-getReg !xs !i = VM.unsafeRead xs (idx i)
+getReg xs i = VM.unsafeRead xs (idx i)
 
 {-# INLINE setReg #-}
 setReg :: Vec s -> Char -> Int -> ST s ()
-setReg !regs !ch !x =  VM.unsafeWrite regs (idx ch) x
+setReg regs ch x =  VM.unsafeWrite regs (idx ch) x
 
 -- setReg' :: Vec s -> Char -> Int -> ST s (Vec s)
 -- setReg' regs ch x =  do
@@ -176,17 +178,19 @@ setReg !regs !ch !x =  VM.unsafeWrite regs (idx ch) x
 --                        pure regs
 
 {-# INLINE toVal #-}
-toVal _ !(Left i) = pure $! i
-toVal !vs !(Right ch) = getReg vs ch
+toVal _ (Left i)    = pure $! i
+toVal vs (Right ch) = getReg vs ch
 
-{-# INLINE evaluateM #-}
+
+--
+
+
 evaluateM ::  V.Vector Instruction -> (Vec s) -> (Int, Int, [Int], [Int], Bool) ->  ST s (Int, Int, [Int], [Int], Bool)
-evaluateM !is !rs !(ip, ic, send, recv, _)  =
-  do
+evaluateM is rs (!ip, !ic, !send, !recv, !_)  = do
     -- rs <- st
     case is V.! ip of
        Snd p ->   (\v -> (ip + 1, ic + 1, v:send, recv, False)) <$> (toVal rs p)
-       Set r p -> ((toVal rs p) >>= (setReg rs r)) *> (pure (ip + 1, ic + 1, send, recv, False))
+       Set r p -> ((toVal rs p) >>= (setReg rs r)) *> (pure $! (ip + 1, ic + 1, send, recv, False))
        Add r p -> do
                     v <- toVal rs p
                     rv <- getReg rs r
@@ -204,7 +208,7 @@ evaluateM !is !rs !(ip, ic, send, recv, _)  =
                     pure $! (ip + 1, ic + 1, send, recv, False)
        Rcv r   -> do
                     if null recv
-                    then pure $! (ip + 1, ic + 1, send, recv, True)
+                    then pure $! (ip, ic, send, recv, True)
                     else do
                            setReg rs r (head recv)
                            pure $! (ip + 1, ic + 1, send, tail recv, False)
@@ -212,7 +216,7 @@ evaluateM !is !rs !(ip, ic, send, recv, _)  =
                     -- if (r' /= 0)
                     -- then do
                     --        if null recv
-                    --        then pure (ip + 1, ic + 1, send, recv, True)
+                    --        then pure (ip, ic, send, recv, True)
                     --        else do
                     --               setReg rs r (head recv)
                     --               pure (ip + 1, ic + 1, send, tail recv, False)
@@ -221,7 +225,7 @@ evaluateM !is !rs !(ip, ic, send, recv, _)  =
        Jgz c l  -> do
                      c' <- toVal rs c
                      l' <- toVal rs l
-                     if (c' /= 0)
+                     if (c' > 0)
                      then pure $!  (ip + l', ic + 1, send, recv, False)
                      else pure $!  (ip + 1, ic + 1, send, recv, False)
 
@@ -235,21 +239,32 @@ evaluateM !is !rs !(ip, ic, send, recv, _)  =
 --         pure (UV.toList res, p1, s1)--undefined --((VU.freeze v0), p1, s1)
 
 -- 127 -- too low
+f:: V.Vector Instruction -> ((Int, Int, [Int], [Int], Bool), VU.Vector Int,
+              (Int, Int, [Int], [Int], Bool), VU.Vector Int, Int)
+             -> ((Int, Int, [Int], [Int], Bool), VU.Vector Int,
+                 (Int, Int, [Int], [Int], Bool), VU.Vector Int, Int)
+f !is (z0@(!p0, !c0, !s0, !r0, !rq0), !regs0, z1@(!p1, !c1, !s1, !r1, !rq1), !regs1, !numSend) = --trace ((show regs0) ++ ", " ++ (show regs1) ++ ", " ++ (show numSend) ++
+                                                                                                -- "\n" ++ (show (p0, c0, length s0, length r0, rq0)) ++ ", " ++ (show (p1, c1, length s1, length r1, rq1) )) $
+   let
+      ((!p0', !c0', !s0', !r0', !rq0'), reg0') = runUntilEmptyQ is  regs0 z0
+      ((!p1', !c1', !s1', !r1', !rq1'), reg1') = runUntilEmptyQ is  regs1 z1
+   in   ((p0', c0', [], r0' ++ (reverse s1'), rq0'), reg0', (p1', c1', [],  r1' ++ (reverse s0'), rq1'), reg1', numSend + (length s1'))
+
+terminationCond _N !((p0, c0, s0, r0, rq0), _, (p1, c1, s1, r1, rq1), _,  _) = -- trace ((show (_N, p0, p1, rq0, rq1, length s0, length r0, length s1, length r1))) $
+           {-  (c0 + c1) > _M && -}  ( rq0 && rq1 && (null s0) && (null s1) && (null r0) && (null r1)) || p0 < 0 || p0 >= _N || p1 < 0 || p1 >= _N
+
 runDuet :: [Instruction] -> Int -> ((Int, Int, [Int], [Int], Bool), VU.Vector Int, (Int, Int, [Int], [Int], Bool), VU.Vector Int, Int)
-runDuet xs _M = head $ dropWhile (not . terminationCond) $ iterate'  f (z0, reg0, z0, reg1, 0)
+runDuet xs _M = head $! dropWhile (not . (terminationCond _N)) $ iterate'  (f is) (z0, reg0, z0, reg1, 0)
    where
      reg0 = (VU.replicate 26 (0::Int)) VU.// [(idx 'p', 0)]
      reg1 = (VU.replicate 26 (0::Int)) VU.// [(idx 'p', 1)]
      _N = length xs
      is = (V.fromList xs)
      z0 = (0, 0, [], [], False)
-     terminationCond !((p0, c0, s0, r0, rq0), _, (p1, c1, s1, r1, rq1), _,  _) =
-           {-  (c0 + c1) > _M && -}  ( rq0 && rq1 && (null r0) && (null r1)) || p0 < 0 || p0 >= _N || p1 < 0 || p1 >= _N
-     f !(z0@(p0, c0, s0, r0, rq0), regs0, z1@(p1, c1, s1, r1, rq1), regs1, numSend) =
-        let
-           ((!p0', !c0', !s0', !r0', !rq0'), reg0') = runUntilEmptyQ is regs0 z0
-           ((!p1', !c1', !s1', !r1', !rq1'), reg1') = runUntilEmptyQ is regs1 z1
-        in  ((p0', c0', [], r0' ++ (reverse s1'), rq0'), reg0', (p1', c1', [],  r1' ++ reverse s0', rq1'), reg1', numSend + (length s0')) -- r0 and r1 are empty
+
+
+
+     -- r0 and r1 are empty
 
   -- runST $ do
   --   reg0 <- VM.replicate 26 0
@@ -276,22 +291,25 @@ runDuet xs _M = head $ dropWhile (not . terminationCond) $ iterate'  f (z0, reg0
 
 
 --iterate' f x = x `seq` x : iterate' f (f x)
-{-# INLINE iterateUntilM' #-}
+-- {-# INLINE iterateUntilM' #-}
+
 iterateUntilM' :: (Monad m) => (a -> Bool) -> (a -> m a) -> a -> m a
 iterateUntilM' !p !f !v
-    | p v       = return v
+    | p v       = return $! v
     | otherwise = (f $! v) >>= iterateUntilM' p f
 
 
+queueIsEmpty _N (p, ic, send, recv, req) = p < 0 || p >= _N || (req && null recv)
+
 runUntilEmptyQ :: V.Vector Instruction -> (VU.Vector Int) -> (Int, Int, [Int], [Int], Bool) ->  ((Int, Int, [Int], [Int], Bool), (VU.Vector Int))
-runUntilEmptyQ !is !regf !z = runST $ do
+runUntilEmptyQ is regf z = runST $ (do
                      reg <- VU.thaw regf
-                     res   <- iterateUntilM' queueIsEmpty (evaluateM is reg) z
+                     res   <- iterateUntilM (queueIsEmpty _N) (evaluateM is reg) z -- this fucker skips the update if queue is empty
                      reg' <- VU.freeze reg
-                     pure (res, reg' )
+                     pure  (res, reg' ))
         where
           _N = V.length is
-          queueIsEmpty !(!p, !ic, !send, !recv, !req) = req || p < 0 || p >= _N || req -- || ((ic+1) `mod` 100 == 0)
+
 
 
 
@@ -316,3 +334,6 @@ vexample = do
   forM_ [0..9] $ \i ->
      VM.write v i (2*i)
   pure v
+
+  -- That's not the right answer; your answer is too high, 7493,
+  -- curiously that's the right answer for other account
