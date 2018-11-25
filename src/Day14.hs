@@ -60,6 +60,7 @@ gridToGraph xs = (xs' >>= f)
                         foo cb (idx (i) (j+1))
              ]
 
+-- 1242 for test
 tx = gridToGraph (generateGrid "stpzcrnm")
 
 
