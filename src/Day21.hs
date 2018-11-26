@@ -1,7 +1,7 @@
 {-# LANGUAGE LambdaCase #-}
 
 module Day21
-    (
+    (iterateN
     ) where
 
 import           Control.Applicative
