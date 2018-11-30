@@ -217,7 +217,7 @@ iterateUntilM' !p !f !v
     | otherwise = (f $! v) >>= iterateUntilM' p f
 
 
-queueIsEmpty _N (p, ic) = p < 0 || p >= _N  -- || ic >= (7975 * 16034) + 83
+queueIsEmpty _N (p, ic) = p < 0 || p >= _N  -- || ic >= 96460375
 -- 320050337 - 148387
 -- 9000000   - 109387
 runM:: V.Vector Instruction -> ((Int, Int), VU.Vector Int) ->  ((Int, Int), (VU.Vector Int))
@@ -234,3 +234,13 @@ printRegisters :: ([Int], Int, Int) -> String
 printRegisters (rs, p, s) = (show rs') ++ "..., p: " ++ (show p) ++ ", s: " ++ (show s)
   where
     rs' = reverse $ dropWhile (== 0) (reverse rs)
+
+{-
+def bar() = {
+    (108100).to(125100, 17).filter { b =>
+      Iterator.from(2).takeWhile(_ != b).exists { d =>
+        b % d == 0
+      }
+    }.length
+  }
+-}
