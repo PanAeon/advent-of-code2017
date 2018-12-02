@@ -2,15 +2,16 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE TypeFamilies #-}
 
-import Lib
+
 import Codec.Picture
 import Codec.Picture.Types
 -- import qualified Data.ByteString.Lazy as L
 import qualified Data.Vector.Storable as V
 import qualified Data.Vector as DV
 import Control.Monad(void)
--- import System.Process
 import Day21
+-- import System.Process
+
 
 greyScaleWitness ::  Image Pixel8
 greyScaleWitness  = img 2187 2187
