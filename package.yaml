@@ -35,6 +35,7 @@ dependencies:
 - vector-algorithms
 - monad-loops
 - primitive
+- kan-extensions
 
 
 library:
